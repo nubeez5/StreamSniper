@@ -1,0 +1,823 @@
+local localPlayer = game.Players.LocalPlayer
+local localPlayerMouse = localPlayer:GetMouse()
+
+local guiParent = game:GetService("RunService"):IsStudio() and game.Players.LocalPlayer.PlayerGui or game.CoreGui
+local scriptEnabled = true
+
+local before_CameraMinZoom = 0
+local before_CameraMaxZoom = 1024
+
+local optionHeight = 17
+
+local windowSize = Vector2.new(350, 125)
+local windowMinimized = false
+
+local themeSetting = 0
+--[[
+
+Dark Theme     0
+Light Theme    1
+
+]]
+
+local THEME = {}
+if themeSetting == 0 then
+	THEME.TextFont_Standard = Enum.Font.Gotham
+	THEME.TextFont_SemiBold = Enum.Font.GothamSemibold
+	THEME.TextFont_Bold = Enum.Font.GothamBold
+	
+	THEME.Comment_Text_Color = Color3.fromRGB(255, 255, 255)
+	THEME.Padding_TextColor = Color3.fromRGB(230, 180, 120)
+	
+	THEME.TextColor = Color3.fromRGB(255, 255, 255)
+	
+	THEME.Background_Color_1 = Color3.fromRGB(60, 60, 60)
+	THEME.Background_Color_2 = Color3.fromRGB(45, 45, 45)
+	THEME.Background_Color_3 = Color3.fromRGB(30, 30, 30)
+	
+	THEME.SearchIcon_Color = Color3.fromRGB(160, 160, 160)
+	THEME.SearchBox_Suggestions_Background_Color = Color3.fromRGB(45, 45, 45)
+	THEME.SearchBox_SuggestionsBorder_Color = Color3.fromRGB(90, 90, 90)
+	
+	THEME.Slider_Text_Color = Color3.fromRGB(255, 255, 255)
+	THEME.Slider_Button_Color = Color3.fromRGB(255, 255, 255) -- Supposed to cover the other option
+	
+	THEME.TextBoxColor = Color3.fromRGB(45, 45, 45)
+	
+	THEME.ButtonColor = Color3.fromRGB(45, 45, 45)
+	THEME.ButtonHoverColor = Color3.fromRGB(75, 75, 75)
+elseif themeSetting == 1 then
+	
+end
+
+
+
+local httpService = game:GetService("HttpService")
+local urlTemplate = "https://www.roblox.com/games/getgameinstancesjson?placeId=PLACEIDHERE&startindex=STARTINDEXHERE"
+
+
+-- Gui Framework
+local function CreateGui(parent, name, rsesetOnSpawn, ignoreGuiInset)
+	local gui = Instance.new("ScreenGui", parent)
+	gui.Name = name
+	
+	gui.IgnoreGuiInset = false
+	gui.ResetOnSpawn = false
+	
+	return gui
+end
+
+local function AddPadding(parent, size, text)
+	local padding = Instance.new("TextButton", parent)
+	padding.Name = "Padding"
+	padding.BackgroundTransparency = 1
+	padding.BorderSizePixel = 0
+	padding.Size = UDim2.new(1, 0, 0, size)
+	padding.Font = THEME.TextFont_Bold
+	padding.TextColor3 = THEME.Padding_TextColor
+	padding.TextSize = 13
+	padding.TextXAlignment = Enum.TextXAlignment.Left
+	padding.TextYAlignment = Enum.TextYAlignment.Bottom
+	padding.Text = "  " .. text
+	
+	return padding
+end
+
+local function CreateFrame(parent, name, borderRounding, size, position, anchorPoint)
+	local frame_Position = position ~= nil and position or UDim2.new(0, 0, 0, 0)
+	local frame_AnchorPoint = anchorPoint ~= nil and anchorPoint or Vector2.new(0, 0)
+	
+	local frame = Instance.new("ImageLabel", parent)
+	frame.Name = name
+	frame.Image = "rbxassetid://3570695787"
+	frame.ImageColor3 = THEME.Background_Color_1
+	frame.ScaleType = Enum.ScaleType.Slice
+	frame.SliceCenter = Rect.new(Vector2.new(100, 100), Vector2.new(100, 100))
+	frame.SliceScale = 0.01 * borderRounding
+	frame.BackgroundTransparency = 1
+	frame.BorderSizePixel = 0
+	frame.Active = true
+	
+	frame.Size = size
+	frame.Position = frame_Position
+	frame.AnchorPoint = frame_AnchorPoint
+	
+	return frame
+end
+
+local function CreateDragHandle(parent, attachedGui, name, size, position, anchorPoint, text)
+	local handle_Size = size ~= nil and size or UDim2.new(1, 0, 1, 0)
+	local handle_Position = position ~= nil and position or UDim2.new(0, 0, 0, 0)
+	local handle_AnchorPoint = anchorPoint ~= nil and anchorPoint or Vector2.new(0, 0)
+	
+	local handle = Instance.new("TextButton", parent)
+	handle.Name = name
+	handle.Size = handle_Size
+	handle.Position = handle_Position
+	handle.AnchorPoint = handle_AnchorPoint
+	handle.BackgroundTransparency = 1
+	handle.Text = "  " .. text
+	handle.TextSize = 15
+	handle.Font = Enum.Font.GothamBold
+	handle.TextXAlignment = Enum.TextXAlignment.Left
+	handle.TextColor3 = THEME.TextColor
+	
+	local border = Instance.new("Frame", handle)
+	border.Name = "TitleBorder"
+	border.Size = UDim2.new(1, 0, 0, 1)
+	border.Position = UDim2.new(0.5, 0, 0, 18)
+	border.AnchorPoint = Vector2.new(0.5, 0)
+	border.BorderSizePixel = 0
+	
+	local titleBorder_Gradient = Instance.new("UIGradient", border)
+	border.BackgroundColor3 = Color3.new(1, 1, 1)
+	titleBorder_Gradient.Transparency = NumberSequence.new{
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.05, 0.5),
+		NumberSequenceKeypoint.new(0.95, 0.5),
+		NumberSequenceKeypoint.new(1, 1)
+	}
+	
+	local closeButton = Instance.new("ImageButton", handle)
+	closeButton.Name = "CloseButton"
+	closeButton.Image = "rbxassetid://4389749368"
+	closeButton.Size = UDim2.new(0, 12, 0, 12)
+	closeButton.AnchorPoint = Vector2.new(0, 0.5)
+	closeButton.BackgroundTransparency = 1
+	closeButton.AutoButtonColor = false
+	closeButton.Position = UDim2.new(1, -18, 0.5, 0)
+	
+	local miniButton = Instance.new("ImageButton", handle)
+	miniButton.Name = "MinimizeButton"
+	miniButton.Image = "rbxassetid://4530358017"
+	miniButton.Size = UDim2.new(0, 12, 0, 12)
+	miniButton.AnchorPoint = Vector2.new(0, 0.5)
+	miniButton.BackgroundTransparency = 1
+	miniButton.AutoButtonColor = false
+	miniButton.Position = UDim2.new(1, -37, 0.5, 0)
+	
+	-- Enable Disable
+	miniButton.MouseButton1Click:Connect(function()
+		if windowMinimized then
+			windowMinimized = false
+			
+			parent.Options_Container.Visible = true
+			parent.Size = UDim2.new(0, windowSize.X, 0, windowSize.Y)
+		else
+			windowMinimized = true
+			
+			parent.Options_Container.Visible = false
+			parent.Size = UDim2.new(0, windowSize.X, 0, 18)
+			
+			localPlayer.CameraMinZoomDistance = before_CameraMinZoom
+			localPlayer.CameraMaxZoomDistance = before_CameraMaxZoom
+		end
+	end)
+	
+	closeButton.MouseButton1Click:Connect(function()
+		scriptEnabled = false
+		attachedGui.Enabled = false
+	end)
+	
+	
+	
+	local dragging = false
+	
+	handle.MouseButton1Down:Connect(function()
+		dragging = true
+		
+		local dragStartOffset = Vector2.new(localPlayerMouse.X, localPlayerMouse.Y) - handle.AbsolutePosition
+		
+		repeat
+			parent.Position = UDim2.new(0, localPlayerMouse.X - dragStartOffset.X, 0, localPlayerMouse.Y - dragStartOffset.Y)
+			
+			game:GetService("RunService").RenderStepped:Wait()
+		until dragging == false
+	end)
+	
+	handle.MouseButton1Up:Connect(function()
+		dragging = false
+	end)
+	
+	return handle
+end
+
+local function CreateScrollingFrame(parent, name, sizeX, positionX, anchorPoint, padding)
+	local container_Size = positionX ~= nil and positionX or UDim2.new(0, 0, 0, 0)
+	local container_AnchorPoint = anchorPoint ~= nil and anchorPoint or Vector2.new(0, 0)
+	
+	local container = Instance.new("ScrollingFrame", parent)
+	container.Name = name
+	container.BorderSizePixel = 0
+	container.BackgroundTransparency = 1
+	container.ScrollingEnabled = true
+	container.Size = sizeX
+	container.Position = container_Size
+	container.AnchorPoint = container_AnchorPoint
+	container.BottomImage = container.MidImage
+	container.TopImage = container.MidImage
+	container.ScrollBarThickness = 7
+	
+	local list = Instance.new("UIListLayout", container)
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Padding = UDim.new(0, padding)
+	
+	local scrolling = false
+	local engaged = false
+	
+	container.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 30)
+	
+	container.ChildAdded:Connect(function()
+		container.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 30)
+	end)
+	
+	container.ChildRemoved:Connect(function()
+		container.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 30)
+	end)
+	
+	return container
+end
+
+local function CreateOption(parent, name, text, paddingLeft)
+	local option = Instance.new("Frame", parent)
+	option.Name = name
+	option.BackgroundTransparency = 1
+	option.Size = UDim2.new(1, 0, 0, optionHeight)
+	
+	local option_Title = Instance.new("TextLabel", option)
+	option_Title.Name = name .. "_Title"
+	option_Title.BackgroundTransparency = 1
+	option_Title.Size = UDim2.new(1, -paddingLeft, 1, 0)
+	option_Title.Position = UDim2.new(1, 0, 0, 0)
+	option_Title.AnchorPoint = Vector2.new(1, 0)
+	
+	option_Title.Font = THEME.TextFont_Standard
+	option_Title.TextColor3 = THEME.TextColor
+	option_Title.TextSize = 14
+	option_Title.TextXAlignment = Enum.TextXAlignment.Left
+	option_Title.Text = text
+	
+	return option
+end
+
+local function CreateSlider(parent, sizeX, positionX, value1, value2, secondIsDefault)
+	local sliderOption = secondIsDefault == true and 1 or 0
+	
+	
+	local frame = CreateFrame(parent, "Slider", 3, UDim2.new(0, sizeX, 1, 0), UDim2.new(0, positionX, 0, 0))
+	frame.ImageColor3 = THEME.Background_Color_2
+	
+	local sliderClickbox = Instance.new("TextButton", frame)
+	sliderClickbox.Name = "ClickBox"
+	sliderClickbox.BackgroundTransparency = 1
+	sliderClickbox.Size = UDim2.new(1, 0, 1, 0)
+	sliderClickbox.ZIndex = 2
+	sliderClickbox.Text = ""
+	
+	local sliderButton = Instance.new("ImageButton", frame)
+	sliderButton.Name = "SliderButton"
+	sliderButton.Position = UDim2.new(0, 0, 0, 0)
+	sliderButton.Size = UDim2.new(0.5, 0, 1, 0)
+	sliderButton.BackgroundTransparency = 1
+	
+	sliderButton.Image = "rbxassetid://3570695787"
+	sliderButton.ImageColor3 = THEME.Slider_Button_Color
+	sliderButton.ScaleType = Enum.ScaleType.Slice
+	sliderButton.SliceCenter = Rect.new(Vector2.new(100, 100), Vector2.new(100, 100))
+	sliderButton.SliceScale = 0.02
+	
+	local option_1 = Instance.new("TextLabel", frame)
+	option_1.Name = "Option_1"
+	option_1.Size = UDim2.new(0.5, 0, 1, 0)
+	option_1.Position = UDim2.new(0, 0, 0, 0)
+	option_1.BackgroundTransparency = 1
+	option_1.Font = Enum.Font.GothamSemibold
+	option_1.TextSize = 13
+	option_1.TextColor3 = THEME.Slider_Text_Color
+	option_1.Text = value1
+	
+	local option_2 = option_1:Clone()
+	option_2.Name = "Option_2"
+	option_2.Parent = frame
+	option_2.Position = UDim2.new(0.5, 0, 0, 0)
+	option_2.Text = value2
+	
+	
+	local sliderChanged = false
+	
+	local function Change()
+		if sliderOption == 1 then
+			sliderOption = 0
+			
+			local goal = {}
+			goal.Position = UDim2.new(0.5, 0, 0, 0)
+			
+			local info = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.InOut)
+			local tween = game:GetService("TweenService"):Create(sliderButton, info, goal)
+			tween:Play()
+		elseif sliderOption == 0 then
+			sliderOption = 1
+			
+			local goal = {}
+			goal.Position = UDim2.new(0, 0, 0, 0)
+			
+			local info = TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.InOut)
+			local tween = game:GetService("TweenService"):Create(sliderButton, info, goal)
+			tween:Play()
+		end
+		
+		sliderChanged = true
+	end
+	
+	Change()
+	
+	sliderClickbox.MouseButton1Click:Connect(function()
+		Change()
+	end)
+	
+	local t = {}
+	function t.GetValue()
+		if sliderOption == 0 then
+			return value1
+		else
+			return value2
+		end
+	end
+	
+	function t.ChangeValue(v)
+		sliderOption = v
+		
+		Change()
+	end
+	
+	function t.ValueChanged()
+		local v = sliderChanged
+		
+		if sliderChanged then
+			sliderChanged = false
+		end
+		
+		return v
+	end
+	
+	return t
+end
+
+local function CreateButton(parent, sizeX, positionX, buttonText)
+	local isPressed = false
+	
+	local frame = CreateFrame(parent, "Button", 3, UDim2.new(0, sizeX, 1, 0), UDim2.new(0, positionX, 0, 0))
+	frame.ImageColor3 = THEME.ButtonColor
+	
+	local button = Instance.new("TextButton", frame)
+	button.Name = "ButtonClickable"
+	button.Text = buttonText
+	button.BackgroundTransparency = 1
+	button.Font = THEME.TextFont_SemiBold
+	button.TextColor3 = THEME.TextColor
+	button.TextSize = 13
+	button.AutoButtonColor = false
+	button.Size = UDim2.new(1, 0, 1, 0)
+	
+	button.MouseEnter:Connect(function()
+		frame.ImageColor3 = THEME.ButtonHoverColor
+	end)
+	
+	button.MouseLeave:Connect(function()
+		frame.ImageColor3 = THEME.ButtonColor
+	end)
+	
+	button.MouseButton1Click:Connect(function()
+		isPressed = true
+	end)
+	
+	-- Return
+	local returnTable = {}
+	
+	function returnTable.WasClicked()
+		local wasPressed = isPressed
+		isPressed = false
+		
+		return wasPressed
+	end
+	
+	return returnTable
+end
+
+local function CreateSearchBox(parent, sizeX, positionX, input_options, input_defaultOptionIndex)
+	local returnTable = {}
+	
+	local options = input_options
+	local reverse_options = options
+	
+	local defaultOptionIndex = #options - input_defaultOptionIndex + 1
+	
+	for i = 1, math.floor(#reverse_options / 2) do
+		local j = #reverse_options - i + 1
+		reverse_options[i], reverse_options[j] = reverse_options[j], reverse_options[i]
+	end
+	
+	returnTable.CurrentValue = reverse_options[defaultOptionIndex]
+	
+	local frame = CreateFrame(parent, "SearchBox", 3, UDim2.new(0, sizeX, 1, 0), UDim2.new(0, positionX, 0, 0))
+	frame.ImageColor3 = THEME.Background_Color_2
+	frame.ZIndex = 2
+	
+	local searchIcon = Instance.new("ImageLabel", frame)
+	searchIcon.Name = "SearchIcon"
+	searchIcon.BackgroundTransparency = 1
+	searchIcon.Image = "rbxassetid://4928842550"
+	searchIcon.ImageColor3 = THEME.SearchIcon_Color
+	searchIcon.Size = UDim2.new(0, parent.AbsoluteSize.Y, 0, parent.AbsoluteSize.Y - 1)
+	searchIcon.Position = UDim2.new(0, 2, 0, 0)
+	searchIcon.ZIndex = 2
+	
+	local searchBox = Instance.new("TextBox", frame)
+	searchBox.Name = parent.Name .. "_SearchBox"
+	searchBox.BorderSizePixel = 0
+	searchBox.BackgroundTransparency = 1
+	searchBox.ZIndex = 2
+	
+	searchBox.AnchorPoint = Vector2.new(1, 0)
+	searchBox.Position = UDim2.new(1, 2, 0, 0)
+	searchBox.Size = UDim2.new(1, -parent.AbsoluteSize.Y - 2, 1, 0)
+	
+	searchBox.Font = THEME.TextFont_SemiBold
+	searchBox.Text = reverse_options[defaultOptionIndex]
+	searchBox.TextSize = parent.AbsoluteSize.Y - 4
+	searchBox.TextColor3 = THEME.TextColor
+	searchBox.TextXAlignment = Enum.TextXAlignment.Left
+	
+	-- Script
+	local suggestions = CreateFrame(parent, "Suggestions", 3, UDim2.new(0, sizeX, 0, 0), UDim2.new(0, positionX, 0, 0))
+	suggestions.ImageColor3 = THEME.SearchBox_Suggestions_Background_Color
+	suggestions.ZIndex = 2
+	
+	local suggestionsBorder = Instance.new("Frame", suggestions)
+	suggestionsBorder.Size = UDim2.new(1, -2, 0, 1)
+	suggestionsBorder.Position = UDim2.new(0, 1, 0, parent.AbsoluteSize.Y + 2)
+	suggestionsBorder.BorderSizePixel = 0
+	suggestionsBorder.BackgroundColor3 = THEME.SearchBox_SuggestionsBorder_Color
+	suggestionsBorder.BackgroundTransparency = 1
+	suggestionsBorder.ZIndex = 2
+		
+	local gradient = Instance.new("UIGradient", suggestionsBorder)
+	gradient.Transparency = NumberSequence.new(
+		{
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.1, 0),
+			NumberSequenceKeypoint.new(0.9, 0),
+			NumberSequenceKeypoint.new(1, 1)
+		}
+	)
+	
+	local focused = false
+	local suggestionOptions = {}
+	
+	local currentValue = defaultOptionIndex
+	local changedValue = false
+	local overallHasChangedValue = false -- For return table
+	
+	local function Update()
+		for _, v in pairs(suggestionOptions) do
+			if v then
+				v:Destroy()
+			end
+		end
+		
+		suggestionOptions = {}
+		
+		local shownSuggestions = {}
+		
+		if searchBox.Text == "" then
+			shownSuggestions = reverse_options
+		else
+			for _, v in pairs(reverse_options) do
+				if string.find(string.lower(v), string.lower(searchBox.Text)) then
+					table.insert(shownSuggestions, v)
+				end
+			end
+		end
+		
+		suggestions.Size = UDim2.new(0, sizeX, #shownSuggestions + 1, 8)
+		
+		if #shownSuggestions > 0 then
+			suggestionsBorder.BackgroundTransparency = 0
+			
+			for i, v in pairs(shownSuggestions) do
+				local positionId = (#shownSuggestions - i) + 1
+				
+				local newSuggestion = Instance.new("TextButton", suggestions)
+				newSuggestion.Name = "Suggestion_" .. v
+				newSuggestion.Text = ""
+				newSuggestion.BackgroundTransparency = 1
+				newSuggestion.Size = UDim2.new(1, 0, 0, searchBox.AbsoluteSize.Y)
+				newSuggestion.Position = UDim2.new(0, 0, 0, ((positionId + 1) * searchBox.AbsoluteSize.Y + 2) - 12)
+				newSuggestion.ZIndex = 101
+				
+				local newSuggestionText = Instance.new("TextLabel", newSuggestion)
+				newSuggestionText.Name = "SuggestionText"
+				newSuggestionText.AnchorPoint = Vector2.new(1, 0)
+				newSuggestionText.Position = UDim2.new(1, 0, 0, 0)
+				newSuggestionText.Size = searchBox.Size
+				newSuggestionText.TextXAlignment = Enum.TextXAlignment.Left
+				newSuggestionText.BackgroundTransparency = 1
+				newSuggestionText.Font = THEME.TextFont_SemiBold
+				newSuggestionText.TextColor3 = THEME.TextColor
+				newSuggestionText.Text = v
+				newSuggestionText.TextSize = parent.AbsoluteSize.Y - 4
+				newSuggestionText.ZIndex = 101
+				
+				local icon = searchIcon:Clone()
+				icon.Parent = newSuggestion
+				icon.Position = UDim2.new(0, 2, 0, 0)
+				icon.ZIndex = 101
+				
+				local suggestionId = Instance.new("IntValue", newSuggestion)
+				suggestionId.Name = "SuggestionId"
+				suggestionId.Value = i
+				
+				if newSuggestionText.TextFits == false then
+					repeat
+						newSuggestionText.Text = string.sub(newSuggestionText.Text, 1, string.len(newSuggestionText.Text) - 1) -- Remove one character until text fits
+					until newSuggestionText.TextFits == true
+					
+					newSuggestionText.Text = string.sub(newSuggestionText.Text, 1, string.len(newSuggestionText.Text) - 2) -- Remove extra two characters
+					newSuggestionText.Text = newSuggestionText.Text .. "..."
+				end
+				
+				newSuggestion.MouseButton1Down:Connect(function()
+					searchBox.Text = v
+					Update()
+					
+					currentValue = i
+					changedValue = true
+					overallHasChangedValue = true
+					
+					returnTable.CurrentValue = v
+				end)
+				
+				table.insert(suggestionOptions, newSuggestion)
+			end
+		end
+	end
+	
+	searchBox.Focused:Connect(function()
+		focused = true
+		
+		-- Change ZIndex
+		suggestions.ZIndex = 100
+		suggestionsBorder.ZIndex = 101
+		searchIcon.ZIndex = 101
+		searchBox.ZIndex = 101
+		
+		Update()
+	end)
+	
+	searchBox.FocusLost:Connect(function(enter)
+		changedValue = true
+		focused = false
+		
+		game:GetService("RunService").RenderStepped:Wait()
+		
+		suggestions.Size = UDim2.new(0, sizeX, 1, 0)
+		suggestionsBorder.BackgroundTransparency = 1
+		
+		-- Reset ZIndex
+		suggestions.ZIndex = 2
+		suggestionsBorder.ZIndex = 2
+		searchIcon.ZIndex = 3
+		searchBox.ZIndex = 3
+		
+		if enter then
+			local topSuggestion = nil
+			local topSuggestionY = 1000000
+			
+			for i, v in pairs(suggestions:GetChildren()) do
+				if string.sub(v.Name, 1, 11) == "Suggestion_" then
+					topSuggestion = v
+					topSuggestionY = math.min(topSuggestionY, v.AbsolutePosition.Y)
+				end
+			end
+			
+			if topSuggestion then
+				returnTable.CurrentValue = topSuggestion.SuggestionText.Text
+				searchBox.Text = topSuggestion.SuggestionText.Text
+			end
+		end
+		
+		for _, v in pairs(suggestionOptions) do
+			if v then
+				v:Destroy()
+			end
+		end
+		
+		suggestionOptions = {}
+	end)
+	
+	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		if changedValue == false then
+			Update()
+		else
+			changedValue = false
+		end
+	end)
+	
+	
+	function returnTable.ChangeOptions(newOptions)
+		options = newOptions
+		reverse_options = options
+		
+		for i = 1, math.floor(#reverse_options / 2) do
+			local j = #reverse_options - i + 1
+			reverse_options[i], reverse_options[j] = reverse_options[j], reverse_options[i]
+		end
+	end
+	
+	function returnTable.HasChangedValue()
+		local hasChanged = overallHasChangedValue
+		overallHasChangedValue = false
+		
+		return hasChanged
+	end
+	
+	return returnTable
+end
+
+local function CreateTextBox(parent, sizeX, positionX)
+	local background = CreateFrame(parent, "TextBoxBackground", 3, UDim2.new(0, sizeX, 1, 0), UDim2.new(0, positionX, 0, 0))
+	background.ImageColor3 = THEME.TextBoxColor
+	background.ZIndex = 1
+	
+	local textBox = Instance.new("TextBox", background)
+	textBox.Name = "TextBox"
+	textBox.Size = UDim2.new(1, 0, 1, 0)
+	textBox.BackgroundTransparency = 1
+	textBox.Font = THEME.TextFont_SemiBold
+	textBox.TextSize = parent.AbsoluteSize.Y - 4
+	textBox.TextColor3 = THEME.TextColor
+	textBox.Text = "Enter Here"
+	
+	
+	local changedValue = false
+	
+	textBox.FocusLost:Connect(function(enter)
+		if enter then
+			changedValue = true
+		end
+	end)
+	
+	local returnTable = {}
+	
+	function returnTable.HasChangedValue()
+		local v = changedValue
+		changedValue = false
+		
+		return v
+	end
+	
+	function returnTable.GetText()
+		return textBox.Text
+	end
+	
+	return returnTable
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Gui
+local gui = CreateGui(guiParent, "Stream Sniper")
+
+local mainFrame = CreateFrame(gui, "MainFrame", 4, UDim2.new(0, windowSize.X, 0, windowSize.Y))
+local optionsContainer = CreateScrollingFrame(mainFrame, "Options_Container", UDim2.new(1, 0, 1, -22), UDim2.new(0, 0, 0, 22), nil, 2)
+
+local mainFrame_DragHandle = CreateDragHandle(mainFrame, gui, "MainFrame_DragHandle", UDim2.new(1, 0, 0, 18), nil, nil, "Stream Sniper")
+
+local option_TargetUser = CreateOption(optionsContainer, "TargetUser", "Target Username/UserId", 14)
+local textBox_TargetUser = CreateTextBox(option_TargetUser, 130, 205)
+
+local option_TargetPlace = CreateOption(optionsContainer, "TargetPlace", "Target Place Id", 14)
+local textBox_TargetPlace = CreateTextBox(option_TargetPlace, 130, 205)
+
+AddPadding(optionsContainer, 4, "")
+local option_StartSnipe = CreateOption(optionsContainer, "StartSniping", "Start Sniping", 14)
+local button_StartSnipe = CreateButton(option_StartSnipe, 130, 205, "Snipe")
+
+
+AddPadding(optionsContainer, 10, "")
+local statusTextBackground = Instance.new("Frame", optionsContainer)
+statusTextBackground.Name = "StatusTextBackground"
+statusTextBackground.Size = UDim2.new(1, 0, 0, 14)
+statusTextBackground.BackgroundTransparency = 1
+
+local statusText = Instance.new("TextLabel", statusTextBackground)
+statusText.Name = "StatusText"
+statusText.BackgroundTransparency = 1
+statusText.Font = THEME.TextFont_Standard
+statusText.TextSize = 14
+statusText.TextXAlignment = Enum.TextXAlignment.Left
+statusText.Size = UDim2.new(1, -14, 1, 0)
+statusText.Position = UDim2.new(0, 14, 0, 0)
+statusText.TextColor3 = THEME.TextColor
+statusText.Text = "Status: Waiting"
+
+
+-- Script
+local function GetPlaceData(id, index)
+	local url = urlTemplate
+    url = url:gsub("PLACEIDHERE", tostring(id))
+    url = url:gsub("STARTINDEXHERE", tostring(index))
+    
+    local servers = game:HttpGet(url)
+    local decodedServers = httpService:JSONDecode(servers)
+    
+    return decodedServers
+end
+
+
+local canSnipe = true
+
+game:GetService("RunService").RenderStepped:Connect(function()
+	if button_StartSnipe.WasClicked() and canSnipe then
+		local placeId = tonumber(textBox_TargetPlace.GetText())
+		
+		if type(placeId) == "number" then
+			canSnipe = false
+			
+			local targetUserId
+			
+			local success, errorMsg = pcall(function()
+				targetUserId = type(tonumber(textBox_TargetUser.GetText())) == "number" and tonumber(textBox_TargetUser.GetText()) or game.Players:GetUserIdFromNameAsync(textBox_TargetUser.GetText())
+			end)
+			
+			if targetUserId and success then
+				local targetUserThumbnailUrl = httpService:JSONDecode(game:HttpGet("https://www.roblox.com/headshot-thumbnail/json?userId=" .. targetUserId .. "&width=48&height=48")).Url
+			    
+				local serverCount = GetPlaceData(placeId, 0).TotalCollectionSize
+			   	local prevSearchedServersCount = 0
+			    local searchedServersCount = 0
+				
+				local sameServerCounts = 0
+				
+				statusText.Text = "Status: Sniping"
+			    
+			    spawn(function()
+					wait(2)
+					
+					repeat
+						statusText.Text = "Status: " .. searchedServersCount .. "/" .. serverCount .. " servers searched!"
+						
+						if prevSearchedServersCount == searchedServersCount then
+							sameServerCounts = sameServerCounts + 1
+						end
+						
+						prevSearchedServersCount = searchedServersCount
+						
+						wait(0.7)
+					until sameServerCounts >= 3
+					
+					statusText.Text = "Status: Couldn't find player!"
+					canSnipe = true
+			    end)
+			    
+				for i = 0, math.floor(serverCount / 10) + 1 do
+				    local index = i * 10
+					
+					spawn(function()
+						local data = GetPlaceData(placeId, index)
+						
+						serverCount = data.TotalCollectionSize
+						
+						for _, v in pairs(data.Collection) do
+							for _, plr in pairs(v.CurrentPlayers) do
+			        			if plr.Thumbnail.Url == targetUserThumbnailUrl then
+			        				game:GetService("TeleportService"):TeleportToPlaceInstance(placeId, v.Guid)
+			        			end
+							end
+			    		    
+			    		    searchedServersCount = searchedServersCount + 1
+						end
+					end)
+				end
+				
+				canSnipe = true
+			else
+				statusText.Text = "Status: Invalid user!"
+			end
+		else
+			statusText.Text = "Status: PlaceId can only be numbers!"
+		end
+	end
+end)
